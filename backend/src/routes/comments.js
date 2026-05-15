@@ -2,14 +2,13 @@ const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/auth");
 const { docClient } = require("../config/aws");
-const { PutCommand, QueryCommand, GetCommand } = require("@aws-sdk/lib-dynamodb");
+const { PutCommand, ScanCommand, GetCommand } = require("@aws-sdk/lib-dynamodb");
 const { v4: uuidv4 } = require("uuid");
 
 // Create comment
 router.post("/", authenticate, async (req, res) => {
   try {
     const { taskId, content } = req.body;
-    // Check task exists and user has access
     const task = await docClient.send(new GetCommand({
       TableName: process.env.DYNAMODB_TASKS_TABLE,
       Key: { taskId }
@@ -36,7 +35,6 @@ router.post("/", authenticate, async (req, res) => {
 // Get comments for a task
 router.get("/:taskId", authenticate, async (req, res) => {
   try {
-    // Check task access
     const task = await docClient.send(new GetCommand({
       TableName: process.env.DYNAMODB_TASKS_TABLE,
       Key: { taskId: req.params.taskId }
@@ -45,10 +43,10 @@ router.get("/:taskId", authenticate, async (req, res) => {
     if (req.user.role !== "manager" && task.Item.teamId !== req.user.teamId) {
       return res.status(403).json({ error: "Access denied" });
     }
-    const result = await docClient.send(new QueryCommand({
+    const result = await docClient.send(new ScanCommand({
       TableName: process.env.DYNAMODB_COMMENTS_TABLE,
-      KeyConditionExpression: "commentId = :commentId AND taskId = :taskId",
-      ExpressionAttributeValues: { ":taskId": req.params.taskId, ":commentId": req.params.taskId }
+      FilterExpression: "taskId = :taskId",
+      ExpressionAttributeValues: { ":taskId": req.params.taskId }
     }));
     res.json(result.Items);
   } catch (err) {
