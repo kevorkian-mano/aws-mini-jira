@@ -2,8 +2,9 @@ const express = require("express");
 const router = express.Router();
 const { authenticate, requireManager } = require("../middleware/auth");
 const { docClient, snsClient } = require("../config/aws");
-const { PutCommand, GetCommand, UpdateCommand, DeleteCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { PutCommand, GetCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 const { PublishCommand } = require("@aws-sdk/client-sns");
+const { publishMetric } = require("../services/cloudwatch");
 const { v4: uuidv4 } = require("uuid");
 
 // Create task (manager only)
@@ -24,12 +25,15 @@ router.post("/", authenticate, requireManager, async (req, res) => {
     };
     await docClient.send(new PutCommand({ TableName: process.env.DYNAMODB_TASKS_TABLE, Item: task }));
 
-    // Publish to SNS for notification
+    // Publish to SNS for notification + SQS worker
     await snsClient.send(new PublishCommand({
       TopicArn: process.env.SNS_TOPIC_ARN,
       Message: JSON.stringify({ taskId, title, assigneeId, assigneeName, teamId, teamName }),
       Subject: `New task assigned: ${title}`
     }));
+
+    // CloudWatch metric — tasks created per day
+    await publishMetric("TasksCreated", 1, [{ Name: "Team", Value: teamName || "Unknown" }]);
 
     res.status(201).json(task);
   } catch (err) {
@@ -42,7 +46,6 @@ router.get("/", authenticate, async (req, res) => {
   try {
     let result;
     if (req.user.role === "manager") {
-      // Manager sees everything — filter by teamId query param if provided
       const { teamId } = req.query;
       if (teamId) {
         result = await docClient.send(new QueryCommand({
@@ -52,11 +55,9 @@ router.get("/", authenticate, async (req, res) => {
           ExpressionAttributeValues: { ":teamId": teamId }
         }));
       } else {
-        const { ScanCommand } = require("@aws-sdk/lib-dynamodb");
         result = await docClient.send(new ScanCommand({ TableName: process.env.DYNAMODB_TASKS_TABLE }));
       }
     } else {
-      // Employee — server-side enforce team filter using GSI
       if (!req.user.teamId) return res.status(403).json({ error: "No team assigned" });
       result = await docClient.send(new QueryCommand({
         TableName: process.env.DYNAMODB_TASKS_TABLE,
@@ -79,7 +80,6 @@ router.get("/:taskId", authenticate, async (req, res) => {
       Key: { taskId: req.params.taskId }
     }));
     if (!result.Item) return res.status(404).json({ error: "Task not found" });
-    // Team isolation — employee cannot fetch another team's task by guessing ID
     if (req.user.role !== "manager" && result.Item.teamId !== req.user.teamId) {
       return res.status(403).json({ error: "Access denied" });
     }
@@ -89,13 +89,12 @@ router.get("/:taskId", authenticate, async (req, res) => {
   }
 });
 
-// Update task status (employee can update their team's tasks)
+// Update task
 router.put("/:taskId", authenticate, async (req, res) => {
   try {
-    const { status, title, description, priority, deadline, imageUrl } = req.body;
+    const { status, title, description, priority, deadline } = req.body;
     const now = new Date().toISOString();
 
-    // First get the task to check team
     const existing = await docClient.send(new GetCommand({
       TableName: process.env.DYNAMODB_TASKS_TABLE,
       Key: { taskId: req.params.taskId }
@@ -122,6 +121,17 @@ router.put("/:taskId", authenticate, async (req, res) => {
       },
       ReturnValues: "ALL_NEW"
     }));
+
+    // CloudWatch metric — tasks closed per team
+    if (status === "Done") {
+      await publishMetric("TasksClosed", 1, [{ Name: "Team", Value: existing.Item.teamName || "Unknown" }]);
+      // Calculate time to close
+      const createdAt = new Date(existing.Item.createdAt).getTime();
+      const closedAt = new Date(now).getTime();
+      const hoursToClose = (closedAt - createdAt) / (1000 * 60 * 60);
+      await publishMetric("TimeToClose", hoursToClose, [{ Name: "Team", Value: existing.Item.teamName || "Unknown" }]);
+    }
+
     res.json(result.Attributes);
   } catch (err) {
     res.status(500).json({ error: err.message });
