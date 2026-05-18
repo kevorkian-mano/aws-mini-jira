@@ -1,8 +1,11 @@
 const { CognitoJwtVerifier } = require("aws-jwt-verify");
 
+console.log('POOL ID:', process.env.COGNITO_USER_POOL_ID);
+console.log('CLIENT ID:', process.env.COGNITO_CLIENT_ID);
+
 const verifier = CognitoJwtVerifier.create({
   userPoolId: process.env.COGNITO_USER_POOL_ID,
-  tokenUse: "access",
+  tokenUse: 'id',
   clientId: process.env.COGNITO_CLIENT_ID,
 });
 
@@ -23,6 +26,7 @@ const authenticate = async (req, res, next) => {
     };
     next();
   } catch (err) {
+    console.error('JWT ERROR:', err.message);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 };

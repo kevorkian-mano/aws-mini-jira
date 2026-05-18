@@ -18,10 +18,47 @@ router.post("/", authenticate, requireManager, async (req, res) => {
   }
 });
 
-// Get all projects
 router.get("/", authenticate, async (req, res) => {
   try {
-    const result = await docClient.send(new ScanCommand({ TableName: process.env.DYNAMODB_PROJECTS_TABLE }));
+    let result;
+    
+    if (req.user.role === "manager") {
+      const { teamId } = req.query;
+      if (teamId) {
+        // Fetches projects for a specific team
+        result = await docClient.send(new QueryCommand({
+          TableName: process.env.DYNAMODB_PROJECTS_TABLE,
+          IndexName: "teamId-index",
+          KeyConditionExpression: "teamId = :teamId",
+          ExpressionAttributeValues: { ":teamId": teamId }
+        }));
+      } else {
+        // FIX: You MUST have this else block so result isn't undefined!
+        result = await docClient.send(new ScanCommand({ 
+          TableName: process.env.DYNAMODB_PROJECTS_TABLE 
+        }));
+      }
+    }
+    
+    else {
+      if (!req.user.teamId) {
+         console.log("FAILED: User has no teamId in their token!");
+         return res.status(403).json({ error: "No team assigned" });
+      }
+
+      result = await docClient.send(new QueryCommand({
+        TableName: process.env.DYNAMODB_TASKS_TABLE,
+        IndexName: "teamId-index",
+        KeyConditionExpression: "teamId = :teamId",
+        ExpressionAttributeValues: { ":teamId": req.user.teamId }
+      }));
+      
+      // DEBUG 2: Check what DynamoDB actually returned
+      console.log(`DynamoDB found ${result.Items.length} tasks for team ${req.user.teamId}`);
+    }
+
+
+
     res.json(result.Items);
   } catch (err) {
     res.status(500).json({ error: err.message });

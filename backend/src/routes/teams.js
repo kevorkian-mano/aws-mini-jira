@@ -1,57 +1,63 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const { authenticate, requireManager } = require("../middleware/auth");
-const { docClient } = require("../config/aws");
-const { PutCommand, GetCommand, ScanCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
-const { v4: uuidv4 } = require("uuid");
+const { ScanCommand, PutCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { docClient } = require('../config/aws');
+const { authenticate, requireManager } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
-// Create team (manager only)
-router.post("/", authenticate, requireManager, async (req, res) => {
+const TABLE = process.env.DYNAMODB_TEAMS_TABLE; // 'mini-jira-teams'
+
+// GET /api/teams — all users can fetch teams (needed for dropdowns)
+router.get('/', authenticate, async (req, res) => {
   try {
-    const { name } = req.body;
-    const teamId = uuidv4();
-    const team = { teamId, name, createdAt: new Date().toISOString() };
-    await docClient.send(new PutCommand({ TableName: process.env.DYNAMODB_TEAMS_TABLE, Item: team }));
+    const result = await docClient.send(new ScanCommand({ TableName: TABLE }));
+    const teams = (result.Items || []).map(t => ({
+      teamId:   t.teamId,
+      teamName: t.teamName || t.name || 'Unnamed',
+      createdAt: t.createdAt,
+    }));
+    console.log('TEAMS:', teams); // confirm shape — remove after testing
+    res.json(teams);
+  } catch (err) {
+    console.error('GET /teams error:', err);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
+// POST /api/teams — managers only
+router.post('/', authenticate, requireManager, async (req, res) => {
+  try {
+    const { teamName } = req.body;
+    if (!teamName || !teamName.trim()) {
+      return res.status(400).json({ error: 'teamName is required' });
+    }
+
+    const team = {
+      teamId:    uuidv4(),
+      teamName:  teamName.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: TABLE, Item: team }));
+    console.log('CREATED TEAM:', team); // confirm — remove after testing
     res.status(201).json(team);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('POST /teams error:', err);
+    res.status(500).json({ error: 'Failed to create team' });
   }
 });
 
-// Get all teams
-router.get("/", authenticate, async (req, res) => {
-  try {
-    const result = await docClient.send(new ScanCommand({ TableName: process.env.DYNAMODB_TEAMS_TABLE }));
-    res.json(result.Items);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Get one team
-router.get("/:teamId", authenticate, async (req, res) => {
-  try {
-    const result = await docClient.send(new GetCommand({
-      TableName: process.env.DYNAMODB_TEAMS_TABLE,
-      Key: { teamId: req.params.teamId }
-    }));
-    if (!result.Item) return res.status(404).json({ error: "Team not found" });
-    res.json(result.Item);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Delete team (manager only)
-router.delete("/:teamId", authenticate, requireManager, async (req, res) => {
+// DELETE /api/teams/:teamId — managers only
+router.delete('/:teamId', authenticate, requireManager, async (req, res) => {
   try {
     await docClient.send(new DeleteCommand({
-      TableName: process.env.DYNAMODB_TEAMS_TABLE,
-      Key: { teamId: req.params.teamId }
+      TableName: TABLE,
+      Key: { teamId: req.params.teamId },
     }));
-    res.json({ message: "Team deleted" });
+    res.json({ message: 'Team deleted' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('DELETE /teams error:', err);
+    res.status(500).json({ error: 'Failed to delete team' });
   }
 });
 

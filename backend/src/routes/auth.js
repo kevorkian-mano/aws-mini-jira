@@ -8,20 +8,54 @@ const { PutCommand } = require("@aws-sdk/lib-dynamodb");
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.COGNITO_REGION });
 
 // Assign role and team to a user (manager only)
-router.post("/assign-role", authenticate, requireManager, async (req, res) => {
+router.post('/assign-role', authenticate, requireManager, async (req, res) => {
   try {
-    const { username, role, teamId, teamName } = req.body;
+    const { userId, email, username, role, teamId, teamName } = req.body;
+    const cognitoUsername = username || email || userId;
+    if (!cognitoUsername) {
+      return res.status(400).json({ error: 'No valid user identifier provided' });
+    }
+    if (!role) {
+      return res.status(400).json({ error: 'role is required' });
+    }
+    console.log('Assigning role to:', cognitoUsername, '→', role, teamId);
+    const userAttributes = [
+      { Name: 'custom:role', Value: role },
+      { Name: 'custom:teamId', Value: teamId || '' },
+      { Name: 'custom:teamName', Value: teamName || '' },
+    ];
+    const { CognitoIdentityProviderClient, AdminUpdateUserAttributesCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.COGNITO_REGION });
     await cognitoClient.send(new AdminUpdateUserAttributesCommand({
       UserPoolId: process.env.COGNITO_USER_POOL_ID,
-      Username: username,
-      UserAttributes: [
-        { Name: "custom:role", Value: role },
-        { Name: "custom:teamId", Value: teamId },
-        { Name: "custom:teamName", Value: teamName }
-      ]
+      Username:   cognitoUsername,  
+      UserAttributes: userAttributes,
     }));
-    res.json({ message: "Role assigned successfully" });
+
+    // Also update in DynamoDB Users table if you have one
+    try {
+      const { UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+      const { docClient } = require('../config/aws');
+
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.DYNAMODB_USERS_TABLE,
+        Key: { userId: userId || cognitoUsername },
+        UpdateExpression: 'SET #role = :role, teamId = :teamId, teamName = :teamName',
+        ExpressionAttributeNames: { '#role': 'role' },
+        ExpressionAttributeValues: {
+          ':role':     role,
+          ':teamId':   teamId || '',
+          ':teamName': teamName || '',
+        },
+      }));
+    } catch (dbErr) {
+      // DynamoDB update failed but Cognito succeeded — log and continue
+      console.warn('DynamoDB user update failed (non-critical):', dbErr.message);
+    }
+
+    res.json({ message: 'Role assigned successfully' });
   } catch (err) {
+    console.error('assign-role error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -32,14 +66,22 @@ router.get("/users", authenticate, requireManager, async (req, res) => {
     const result = await cognitoClient.send(new ListUsersCommand({
       UserPoolId: process.env.COGNITO_USER_POOL_ID
     }));
-    const users = result.Users.map(u => ({
-      username: u.Username,
-      email: u.Attributes.find(a => a.Name === "email")?.Value,
-      role: u.Attributes.find(a => a.Name === "custom:role")?.Value || "employee",
-      teamId: u.Attributes.find(a => a.Name === "custom:teamId")?.Value,
-      teamName: u.Attributes.find(a => a.Name === "custom:teamName")?.Value,
-      status: u.UserStatus
-    }));
+    
+    const users = result.Users.map(u => {
+      // Helper function to easily grab attributes
+      const getAttr = (name) => u.Attributes.find(a => a.Name === name)?.Value;
+      
+      return {
+        username: u.Username,
+        email: getAttr("email"),
+        name: getAttr("name") || getAttr("given_name") || null, 
+        role: getAttr("custom:role") || "employee",
+        teamId: getAttr("custom:teamId"),
+        teamName: getAttr("custom:teamName"),
+        status: u.UserStatus
+      };
+    });
+    
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
