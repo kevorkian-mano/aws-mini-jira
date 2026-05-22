@@ -22,6 +22,8 @@ A lightweight team task-management web application — think stripped-down Jira 
 - [Team](#team)
 
 ---
+## Demo Video 
+<iframe src='https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/view?usp=sharing'></iframe>
 ## Screenshots 
 <img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/Architecture%20Diagram.png'> 
 <img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/email.jpeg'>
