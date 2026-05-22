@@ -3,7 +3,7 @@
 
 A lightweight team task-management web application — think stripped-down Jira — fully deployed on AWS. Built as a university cloud computing project demonstrating high-availability architecture, event-driven services, serverless image processing, and real-time notifications.
 
-**Live URL:** https://d2vr2y126cbfkf.cloudfront.net
+**Live URL:** [https://d2vr2y126cbfkf.cloudfront.net](https://d2vr2y126cbfkf.cloudfront.net/)
 
 ---
 
