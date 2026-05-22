@@ -67,7 +67,7 @@ export default function TaskCard({ task, isDragging = false }) {
 
         {task.deadline && (
           <span className={`text-xs font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
-            {isOverdue ? '⚠️ ' : ''}{new Date(task.deadline).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}
+            {isOverdue ? '⚠ ' : ''}{new Date(task.deadline).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}
           </span>
         )}
       </div>
