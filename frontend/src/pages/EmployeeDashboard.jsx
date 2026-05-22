@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal'; // 1. IMPORT YOUR MODAL
@@ -14,11 +14,7 @@ export default function EmployeeDashboard() {
   // 2. ADD STATE FOR THE MODAL
   const [selectedTask, setSelectedTask] = useState(null); 
 
-  useEffect(() => {
-    if (user) fetchMyTasks();
-  }, [user]);
-
-  const fetchMyTasks = async () => {
+  const fetchMyTasks = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/api/tasks');
@@ -30,7 +26,11 @@ export default function EmployeeDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) fetchMyTasks();
+  }, [user, fetchMyTasks]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     setTasks((prev) => prev.map(t => t.taskId === taskId ? { ...t, status: newStatus } : t));

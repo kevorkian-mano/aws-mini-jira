@@ -4,8 +4,11 @@ const { authenticate, requireManager } = require("../middleware/auth");
 const { docClient, snsClient } = require("../config/aws");
 const { PutCommand, GetCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 const { PublishCommand } = require("@aws-sdk/client-sns");
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require("@aws-sdk/client-cognito-identity-provider");
 const { publishMetric } = require("../services/cloudwatch");
 const { v4: uuidv4 } = require("uuid");
+
+const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.COGNITO_REGION || "us-east-1" });
 
 // Create task (manager only)
 router.post("/", authenticate, requireManager, async (req, res) => {
@@ -36,11 +39,40 @@ router.post("/", authenticate, requireManager, async (req, res) => {
     
     await docClient.send(new PutCommand({ TableName: process.env.DYNAMODB_TASKS_TABLE, Item: task }));
 
+    // Fetch assignee's email directly from Cognito — always reliable regardless
+    // of whether the user called register-profile or not
+    let assigneeEmail = null;
+    try {
+      const cognitoUser = await cognitoClient.send(new AdminGetUserCommand({
+        UserPoolId: process.env.COGNITO_USER_POOL_ID,
+        Username: assigneeId,
+      }));
+      assigneeEmail = cognitoUser.UserAttributes?.find(a => a.Name === "email")?.Value || null;
+    } catch (cognitoErr) {
+      console.warn("Could not fetch assignee email from Cognito:", cognitoErr.message);
+    }
+
     // Publish to SNS for notification + SQS worker
     await snsClient.send(new PublishCommand({
       TopicArn: process.env.SNS_TOPIC_ARN,
-      Message: JSON.stringify({ taskId, title, assigneeId, assigneeName, teamId, teamName }),
-      Subject: `New task assigned: ${title}`
+      Subject: `[Mini-Jira] New task assigned to ${assigneeName}`,
+      Message: JSON.stringify({
+        taskId,
+        title,
+        priority,
+        deadline,
+        assigneeId,
+        assigneeName,
+        assigneeEmail,
+        teamId,
+        teamName,
+      }),
+      MessageAttributes: {
+        assigneeEmail: {
+          DataType: "String",
+          StringValue: assigneeEmail || "unknown",
+        }
+      }
     }));
 
     // CloudWatch metric — tasks created per day
