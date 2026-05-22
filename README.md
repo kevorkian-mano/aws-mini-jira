@@ -1,3 +1,4 @@
+
 # mini-jira-aws
 # Mini-Jira AWS
 
@@ -23,7 +24,7 @@ A lightweight team task-management web application — think stripped-down Jira 
 
 ---
 ## Demo Video 
-<iframe src="https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/preview" width="640" height="480"></iframe>
+**Demo Url** : [https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/preview]
 ## Screenshots 
 <img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/Architecture%20Diagram.png'> 
 <img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/email.jpeg'>
