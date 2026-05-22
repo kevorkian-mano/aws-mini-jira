@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -23,47 +23,37 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onDelete }) {
   const [deleting, setDeleting]       = useState(false);
   const fileRef                       = useRef();
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetchComments();
-    fetchImageUrl();
-  }, [task.taskId]);
+  const formatName = (identifier) => {
+    if (!identifier) return 'System';
+    if (identifier.includes('-') && identifier.length > 30) return 'Unknown User';
+    if (identifier.includes('@')) {
+      const namePart = identifier.split('@')[0];
+      return namePart.split(/[._-]/)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    }
+    return identifier;
+  };
 
-
-  // Add this near your imports
-const formatName = (identifier) => {
-  if (!identifier) return 'System';
-  
-  // If it's a UUID from an old log, return "Unknown User" or a truncated ID
-  if (identifier.includes('-') && identifier.length > 30) {
-    return 'Unknown User'; 
-  }
-  
-  // If it's an email from a new log, format it nicely!
-  if (identifier.includes('@')) {
-    const namePart = identifier.split('@')[0];
-    return namePart.split(/[._-]/)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' ');
-  }
-  
-  return identifier;
-};
-
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoadingComments(true);
     try {
       const res = await api.get(`/api/comments/${task.taskId}`);
       setComments(res.data || []);
     } catch { setComments([]); } finally { setLoadingComments(false); }
-  };
+  }, [task.taskId]);
 
-  const fetchImageUrl = async () => {
+  const fetchImageUrl = useCallback(async () => {
     try {
       const res = await api.get(`/api/upload/${task.taskId}/url`);
       setImageUrl(res.data?.url || null);
     } catch { setImageUrl(null); }
-  };
+  }, [task.taskId]);
+
+  useEffect(() => {
+    fetchComments();
+    fetchImageUrl();
+  }, [fetchComments, fetchImageUrl]);
 
   const handleStatusChange = async (newStatus) => {
     try {
