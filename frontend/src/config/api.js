@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Auth } from 'aws-amplify';
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000',
+  baseURL: "https://d2vr2y126cbfkf.cloudfront.net/" ,
 });
 
 api.interceptors.request.use(async (config) => {
