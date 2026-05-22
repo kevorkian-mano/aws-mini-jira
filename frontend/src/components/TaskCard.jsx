@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react';
+import api from '../config/api';
+
 const PRIORITY = {
   High:   { cls: 'bg-red-100 text-red-700',    dot: 'bg-red-500' },
   Medium: { cls: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
@@ -9,15 +12,30 @@ export default function TaskCard({ task, isDragging = false }) {
   const p = PRIORITY[task.priority] || PRIORITY.Medium;
   const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'Done';
 
+  // Fetch a presigned URL from the backend — the raw S3 URL in DynamoDB is
+  // private and returns 403. The presigned URL is time-limited and works.
+  const [presignedUrl, setPresignedUrl] = useState(null);
+
+  useEffect(() => {
+    if (!task.imageUrl) return; // no image attached — skip
+    let cancelled = false;
+    api.get(`/api/upload/${task.taskId}/url`)
+      .then(res => { if (!cancelled) setPresignedUrl(res.data?.url || null); })
+      .catch(() => { if (!cancelled) setPresignedUrl(null); });
+    return () => { cancelled = true; };
+  }, [task.taskId, task.imageUrl]);
+
   return (
     <div className={`bg-white rounded-xl border border-gray-200 p-3.5 select-none
       transition-shadow cursor-pointer
       ${isDragging ? 'shadow-2xl rotate-1 scale-105' : 'hover:shadow-md'}`}>
 
-      {/* Thumbnail */}
+      {/* Thumbnail — only shown when presigned URL is ready */}
       {task.imageUrl && (
-        <img src={task.imageUrl} alt="attachment"
-          className="w-full h-24 object-cover rounded-lg mb-2.5 bg-gray-100" />
+        presignedUrl
+          ? <img src={presignedUrl} alt="attachment"
+              className="w-full h-24 object-cover rounded-lg mb-2.5" />
+          : <div className="w-full h-24 rounded-lg mb-2.5 bg-gray-100 animate-pulse" />
       )}
 
       {/* Title */}
@@ -49,7 +67,7 @@ export default function TaskCard({ task, isDragging = false }) {
 
         {task.deadline && (
           <span className={`text-xs font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
-            {isOverdue ? '⚠ ' : ''}{new Date(task.deadline).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}
+            {isOverdue ? '⚠️ ' : ''}{new Date(task.deadline).toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}
           </span>
         )}
       </div>
