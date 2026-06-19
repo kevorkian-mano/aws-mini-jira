@@ -1,5 +1,3 @@
-
-# mini-jira-aws
 # Mini-Jira AWS
 
 A lightweight team task-management web application — think stripped-down Jira — fully deployed on AWS. Built as a university cloud computing project demonstrating high-availability architecture, event-driven services, serverless image processing, and real-time notifications.
@@ -27,7 +25,6 @@ A lightweight team task-management web application — think stripped-down Jira 
 **Demo Url** : [https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/preview]
 ## Screenshots 
 <img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/Architecture%20Diagram.png'> 
-<img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/email.jpeg'>
 
 ## Overview
 
