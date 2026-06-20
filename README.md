@@ -2,7 +2,11 @@
 
 A lightweight team task-management web application — think stripped-down Jira — fully deployed on AWS. Built as a university cloud computing project demonstrating high-availability architecture, event-driven services, serverless image processing, and real-time notifications.
 
+<img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/Architecture%20Diagram.png'> 
+
 **Live URL:** [https://d2vr2y126cbfkf.cloudfront.net](https://d2vr2y126cbfkf.cloudfront.net/)
+
+**Demo Url** : [https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/preview]
 
 ---
 
@@ -21,10 +25,7 @@ A lightweight team task-management web application — think stripped-down Jira 
 - [Team](#team)
 
 ---
-## Demo Video 
-**Demo Url** : [https://drive.google.com/file/d/1VqiDqiz1ibi_JsrryjwF0xbFEHqP_SZo/preview]
-## Screenshots 
-<img src='https://github.com/lusgad/mini-jira-aws/blob/main/media/Architecture%20Diagram.png'> 
+
 
 ## Overview
 
